@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Codex Claude Monitor</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Usage Deck</p>
+          <h1>Codex + Claude limit monitor</h1>
+          <p class="hero-copy">
+            Local dashboard built from Codex session logs, Claude project logs,
+            and an optional Claude statusLine snapshot for live 5h/7d limits.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="refreshButton" class="action-button">Refresh</button>
+          <div class="stamp">
+            <span>Last fetch</span>
+            <strong id="lastFetch">-</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="summary-grid">
+        <article class="summary-card accent-codex">
+          <p class="summary-label">Codex 7d volume</p>
+          <strong id="codexSevenDayTotal">-</strong>
+          <span id="codexPlanType">-</span>
+        </article>
+        <article class="summary-card accent-claude">
+          <p class="summary-label">Claude 7d volume</p>
+          <strong id="claudeSevenDayTotal">-</strong>
+          <span id="claudeSnapshotState">-</span>
+        </article>
+        <article class="summary-card accent-neutral">
+          <p class="summary-label">Codex sessions</p>
+          <strong id="codexSessionCount">-</strong>
+          <span>Latest entries parsed from .codex</span>
+        </article>
+        <article class="summary-card accent-neutral">
+          <p class="summary-label">Claude sessions</p>
+          <strong id="claudeSessionCount">-</strong>
+          <span>Latest entries parsed from .claude</span>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Current Limits</p>
+            <h2>Live quota snapshot</h2>
+          </div>
+          <p class="panel-note">
+            Codex reads live rate limits from its session JSONL. Claude needs
+            one optional statusLine capture file for the 5h/7d bars.
+          </p>
+        </div>
+        <div id="limitGrid" class="limit-grid"></div>
+      </section>
+
+      <section class="chart-grid">
+        <article class="panel">
+          <div class="panel-header compact">
+            <div>
+              <p class="eyebrow">Codex</p>
+              <h2>Daily token volume</h2>
+            </div>
+          </div>
+          <div id="codexDailyChart" class="bar-chart"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header compact">
+            <div>
+              <p class="eyebrow">Claude</p>
+              <h2>Daily token volume</h2>
+            </div>
+          </div>
+          <div id="claudeDailyChart" class="bar-chart"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header compact">
+          <div>
+            <p class="eyebrow">Codex</p>
+            <h2>Rate limit history</h2>
+          </div>
+        </div>
+        <div id="codexHistoryChart" class="history-chart"></div>
+      </section>
+
+      <section class="table-grid">
+        <article class="panel">
+          <div class="panel-header compact">
+            <div>
+              <p class="eyebrow">Codex</p>
+              <h2>Recent sessions</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Updated</th>
+                  <th>Tokens</th>
+                  <th>Source</th>
+                  <th>Path</th>
+                </tr>
+              </thead>
+              <tbody id="codexSessionsTable"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header compact">
+            <div>
+              <p class="eyebrow">Claude</p>
+              <h2>Recent sessions</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Updated</th>
+                  <th>Tokens</th>
+                  <th>Model</th>
+                  <th>Path</th>
+                </tr>
+              </thead>
+              <tbody id="claudeSessionsTable"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel setup-panel">
+        <div class="panel-header compact">
+          <div>
+            <p class="eyebrow">Claude Setup</p>
+            <h2>Optional live limit capture</h2>
+          </div>
+        </div>
+        <p id="claudeSetupNote" class="setup-copy"></p>
+        <pre id="claudeSetupCommand" class="code-block"></pre>
+      </section>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
