@@ -13,7 +13,12 @@ $settings = @{}
 if (Test-Path $SettingsPath) {
     $raw = Get-Content $SettingsPath -Raw -Encoding UTF8
     if ($raw.Trim()) {
-        $settings = $raw | ConvertFrom-Json -AsHashtable
+        $parsed = $raw | ConvertFrom-Json
+        if ($parsed) {
+            foreach ($property in $parsed.PSObject.Properties) {
+                $settings[$property.Name] = $property.Value
+            }
+        }
     }
 }
 

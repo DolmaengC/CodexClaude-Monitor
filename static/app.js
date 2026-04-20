@@ -32,6 +32,10 @@ function formatPercent(value) {
   return `${Math.round(value)}%`;
 }
 
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Number(value) || 0));
+}
+
 function formatStamp(value) {
   if (!value) {
     return "-";
@@ -63,6 +67,8 @@ function renderLimitCard(title, providerClass, limit, fallbackText) {
 
   const used =
     limit.used_percent ?? limit.used_percentage ?? limit.primary?.used_percent ?? 0;
+  const usedClamped = clampPercent(used);
+  const remaining = 100 - usedClamped;
   const resetAt = limit.resets_at ?? limit.primary?.resets_at ?? "-";
   const windowMinutes = limit.window_minutes ?? limit.primary?.window_minutes ?? null;
   const windowLabel = windowMinutes
@@ -76,12 +82,13 @@ function renderLimitCard(title, providerClass, limit, fallbackText) {
       <p class="limit-title">${escapeHtml(title)}</p>
       <div class="meter-shell">
         <div class="meter-track">
-          <div class="meter-fill" style="width:${Math.max(
-            0,
-            Math.min(100, used)
-          )}%"></div>
+          <div class="meter-fill" style="width:${remaining}%"></div>
         </div>
-        <strong>${formatPercent(used)}</strong>
+        <strong>${formatPercent(remaining)}</strong>
+      </div>
+      <div class="meter-caption">
+        <span>Remaining</span>
+        <span>Used ${formatPercent(usedClamped)}</span>
       </div>
       <div class="limit-meta">
         <span>${escapeHtml(windowLabel)}</span>

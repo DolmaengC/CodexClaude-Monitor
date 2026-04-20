@@ -236,7 +236,23 @@ body {
 .meter-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--claude), var(--codex));
+}
+
+.codex-card .meter-fill {
+  background: linear-gradient(90deg, #2fa887, var(--codex));
+}
+
+.claude-card .meter-fill {
+  background: linear-gradient(90deg, #e08b63, var(--claude));
+}
+
+.meter-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .limit-meta {

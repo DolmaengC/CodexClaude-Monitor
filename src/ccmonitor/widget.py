@@ -66,6 +66,17 @@ def _remaining_percent(limit: dict[str, Any] | None, key: str = "used_percent") 
     return f"{max(0.0, 100.0 - used_float):.0f}%"
 
 
+def _remaining_ratio(limit: dict[str, Any] | None, key: str = "used_percent") -> float:
+    if not limit:
+        return 0.0
+    used = limit.get(key)
+    try:
+        used_float = float(used)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, (100.0 - used_float) / 100.0))
+
+
 def _format_reset(value: str | None) -> str:
     if not value:
         return "-"
@@ -75,7 +86,7 @@ def _format_reset(value: str | None) -> str:
         return value
 
 
-def _build_provider_status(data: dict[str, Any], provider: str) -> dict[str, str]:
+def _build_provider_status(data: dict[str, Any], provider: str) -> dict[str, Any]:
     current = data.get(provider, {}).get("current_limits")
     if provider == "codex":
         five_hour = (current or {}).get("primary")
@@ -83,8 +94,10 @@ def _build_provider_status(data: dict[str, Any], provider: str) -> dict[str, str
         return {
             "title": "Codex",
             "five_left": _remaining_percent(five_hour, "used_percent"),
+            "five_ratio": _remaining_ratio(five_hour, "used_percent"),
             "five_reset": _format_reset((five_hour or {}).get("resets_at")),
             "week_left": _remaining_percent(seven_day, "used_percent"),
+            "week_ratio": _remaining_ratio(seven_day, "used_percent"),
             "week_reset": _format_reset((seven_day or {}).get("resets_at")),
             "available": "yes" if current else "no",
         }
@@ -94,8 +107,10 @@ def _build_provider_status(data: dict[str, Any], provider: str) -> dict[str, str
     return {
         "title": "Claude",
         "five_left": _remaining_percent(five_hour, "used_percentage"),
+        "five_ratio": _remaining_ratio(five_hour, "used_percentage"),
         "five_reset": _format_reset((five_hour or {}).get("resets_at")),
         "week_left": _remaining_percent(seven_day, "used_percentage"),
+        "week_ratio": _remaining_ratio(seven_day, "used_percentage"),
         "week_reset": _format_reset((seven_day or {}).get("resets_at")),
         "available": "yes" if current else "no",
     }
@@ -161,37 +176,84 @@ def run_gui_widget(
     root.minsize(640 if showing_both else 340, 170)
     root.configure(bg="#101516")
     root.attributes("-topmost", topmost)
+    root.overrideredirect(True)
+
+    drag_state = {"x": 0, "y": 0, "resizing": False}
+    window_state = {"maximized": False, "pre_max_geometry": root.geometry()}
 
     outer = tk.Frame(root, bg="#101516", padx=12, pady=12)
     outer.pack(fill="both", expand=True)
+    outer.grid_columnconfigure(0, weight=1)
+    outer.grid_rowconfigure(1, weight=1)
 
-    header = tk.Frame(outer, bg="#101516")
-    header.pack(fill="x")
+    header = tk.Frame(outer, bg="#0c1112", height=34, padx=10, pady=6)
+    header.grid(row=0, column=0, sticky="ew")
+    header.grid_columnconfigure(1, weight=1)
 
     title = tk.Label(
         header,
         text="Usage Limits",
-        bg="#101516",
+        bg="#0c1112",
         fg="#f3f3ec",
         font=("Segoe UI Semibold", 12),
     )
-    title.pack(side="left")
+    title.grid(row=0, column=0, sticky="w")
 
     meta = tk.Label(
         header,
         text="",
-        bg="#101516",
+        bg="#0c1112",
         fg="#93a19a",
         font=("Segoe UI", 8),
     )
-    meta.pack(side="right")
+    meta.grid(row=0, column=1, sticky="e", padx=(0, 10))
+
+    controls = tk.Frame(header, bg="#0c1112")
+    controls.grid(row=0, column=2, sticky="e")
+
+    def style_button(text: str, command: Any, danger: bool = False) -> tk.Button:
+        return tk.Button(
+            controls,
+            text=text,
+            command=command,
+            width=3,
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            bg="#0c1112",
+            activebackground="#b54848" if danger else "#223033",
+            fg="#f6f6ef",
+            activeforeground="#ffffff",
+            font=("Segoe UI Symbol", 10),
+            cursor="hand2",
+        )
 
     cards_frame = tk.Frame(outer, bg="#101516")
-    cards_frame.pack(fill="both", expand=True, pady=(10, 0))
+    cards_frame.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
 
-    provider_cards: dict[str, dict[str, tk.Label]] = {}
+    if showing_both:
+        cards_frame.grid_columnconfigure(0, weight=1, uniform="provider")
+        cards_frame.grid_columnconfigure(1, weight=1, uniform="provider")
+        cards_frame.grid_rowconfigure(0, weight=1)
+    else:
+        cards_frame.grid_columnconfigure(0, weight=1)
+        cards_frame.grid_rowconfigure(0, weight=1)
 
-    def build_card(parent: tk.Widget, accent: str, title_text: str) -> dict[str, tk.Label]:
+    provider_cards: dict[str, dict[str, Any]] = {}
+
+    def set_gauge(canvas: tk.Canvas, fill_id: int, ratio: float) -> None:
+        canvas.update_idletasks()
+        width = max(1, canvas.winfo_width())
+        inset = 2
+        fill_width = inset + max(0.0, min(1.0, ratio)) * max(0, width - inset * 2)
+        canvas.coords(fill_id, inset, inset, fill_width, 14)
+
+    def build_card(
+        parent: tk.Widget,
+        accent: str,
+        title_text: str,
+        column: int = 0,
+    ) -> dict[str, Any]:
         card = tk.Frame(
             parent,
             bg="#171d1f",
@@ -200,13 +262,11 @@ def run_gui_widget(
             padx=10,
             pady=10,
         )
-        card.pack(
-            side="left" if showing_both else "top",
-            fill="both" if showing_both else "x",
-            expand=True,
-            padx=5 if showing_both else 0,
-            pady=5,
-        )
+        if showing_both:
+            padx = (0, 5) if column == 0 else (5, 0)
+            card.grid(row=0, column=column, sticky="nsew", padx=padx, pady=5)
+        else:
+            card.grid(row=0, column=0, sticky="nsew", pady=5)
 
         title_row = tk.Frame(card, bg="#171d1f")
         title_row.pack(fill="x")
@@ -246,13 +306,28 @@ def run_gui_widget(
         )
         five_left.grid(row=0, column=1, sticky="e", padx=(8, 0))
 
+        five_gauge = tk.Canvas(
+            grid,
+            height=16,
+            bg="#171d1f",
+            highlightthickness=0,
+            bd=0,
+        )
+        five_gauge.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        five_gauge.create_rectangle(
+            2, 2, 238, 14, fill="#263033", outline=""
+        )
+        five_fill = five_gauge.create_rectangle(
+            2, 2, 2, 14, fill=accent, outline=""
+        )
+
         tk.Label(
             grid,
             text="reset",
             bg="#171d1f",
             fg="#93a19a",
             font=("Segoe UI", 9),
-        ).grid(row=1, column=0, sticky="w")
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
         five_reset = tk.Label(
             grid,
             text="-",
@@ -260,7 +335,7 @@ def run_gui_widget(
             fg="#d0d5cf",
             font=("Consolas", 9),
         )
-        five_reset.grid(row=1, column=1, sticky="e", padx=(8, 0))
+        five_reset.grid(row=2, column=1, sticky="e", padx=(8, 0), pady=(6, 0))
 
         tk.Label(
             grid,
@@ -268,7 +343,7 @@ def run_gui_widget(
             bg="#171d1f",
             fg="#93a19a",
             font=("Segoe UI", 9),
-        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=3, column=0, sticky="w", pady=(10, 0))
         week_left = tk.Label(
             grid,
             text="-",
@@ -276,7 +351,22 @@ def run_gui_widget(
             fg="#f3f3ec",
             font=("Segoe UI Semibold", 13),
         )
-        week_left.grid(row=2, column=1, sticky="e", padx=(8, 0), pady=(6, 0))
+        week_left.grid(row=3, column=1, sticky="e", padx=(8, 0), pady=(10, 0))
+
+        week_gauge = tk.Canvas(
+            grid,
+            height=16,
+            bg="#171d1f",
+            highlightthickness=0,
+            bd=0,
+        )
+        week_gauge.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        week_gauge.create_rectangle(
+            2, 2, 238, 14, fill="#263033", outline=""
+        )
+        week_fill = week_gauge.create_rectangle(
+            2, 2, 2, 14, fill=accent, outline=""
+        )
 
         tk.Label(
             grid,
@@ -284,7 +374,7 @@ def run_gui_widget(
             bg="#171d1f",
             fg="#93a19a",
             font=("Segoe UI", 9),
-        ).grid(row=3, column=0, sticky="w")
+        ).grid(row=5, column=0, sticky="w", pady=(6, 0))
         week_reset = tk.Label(
             grid,
             text="-",
@@ -292,37 +382,96 @@ def run_gui_widget(
             fg="#d0d5cf",
             font=("Consolas", 9),
         )
-        week_reset.grid(row=3, column=1, sticky="e", padx=(8, 0))
+        week_reset.grid(row=5, column=1, sticky="e", padx=(8, 0), pady=(6, 0))
 
         grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=0)
 
         return {
             "five_left": five_left,
+            "five_gauge": five_gauge,
+            "five_fill": five_fill,
             "five_reset": five_reset,
             "week_left": week_left,
+            "week_gauge": week_gauge,
+            "week_fill": week_fill,
             "week_reset": week_reset,
             "unavailable": unavailable,
         }
 
-    for name in _provider_order(provider):
+    for index, name in enumerate(_provider_order(provider)):
         accent = "#58c7a7" if name == "codex" else "#f29b6d"
         provider_cards[name] = build_card(
             cards_frame,
             accent=accent,
             title_text="Codex" if name == "codex" else "Claude",
+            column=index,
         )
 
     footer = tk.Frame(outer, bg="#101516")
-    footer.pack(fill="x", pady=(10, 0))
+    footer.grid(row=2, column=0, sticky="ew", pady=(10, 0))
     tk.Label(
         footer,
-        text="R refresh  T topmost  Q close",
+        text="Drag header  Double-click maximize  R refresh  T topmost  Q close",
         bg="#101516",
         fg="#6e7a75",
         font=("Segoe UI", 8),
     ).pack(side="left")
 
+    resize_grip = tk.Frame(footer, bg="#2b3437", width=16, height=16, cursor="size_nw_se")
+    resize_grip.pack(side="right")
+
     refresh_job: str | None = None
+
+    def start_drag(event: tk.Event[Any]) -> None:
+        drag_state["x"] = event.x_root
+        drag_state["y"] = event.y_root
+
+    def drag_window(event: tk.Event[Any]) -> None:
+        if window_state["maximized"]:
+            return
+        delta_x = event.x_root - drag_state["x"]
+        delta_y = event.y_root - drag_state["y"]
+        drag_state["x"] = event.x_root
+        drag_state["y"] = event.y_root
+        root.geometry(f"+{root.winfo_x() + delta_x}+{root.winfo_y() + delta_y}")
+
+    def toggle_maximize(_event: object | None = None) -> None:
+        if window_state["maximized"]:
+            root.state("normal")
+            root.geometry(window_state["pre_max_geometry"])
+            window_state["maximized"] = False
+            return
+        window_state["pre_max_geometry"] = root.geometry()
+        root.state("zoomed")
+        window_state["maximized"] = True
+
+    def minimize_window() -> None:
+        root.overrideredirect(False)
+        root.iconify()
+
+    def on_map(_event: object | None = None) -> None:
+        root.after(10, lambda: root.overrideredirect(True))
+
+    def start_resize(event: tk.Event[Any]) -> None:
+        drag_state["resizing"] = True
+        drag_state["x"] = event.x_root
+        drag_state["y"] = event.y_root
+        window_state["pre_max_geometry"] = root.geometry()
+
+    def resize_window(event: tk.Event[Any]) -> None:
+        if window_state["maximized"]:
+            return
+        delta_x = event.x_root - drag_state["x"]
+        delta_y = event.y_root - drag_state["y"]
+        width = max(root.winfo_width() + delta_x, 640 if showing_both else 340)
+        height = max(root.winfo_height() + delta_y, 170)
+        root.geometry(f"{width}x{height}+{root.winfo_x()}+{root.winfo_y()}")
+        drag_state["x"] = event.x_root
+        drag_state["y"] = event.y_root
+
+    def stop_resize(_event: object | None = None) -> None:
+        drag_state["resizing"] = False
 
     def refresh(schedule_next: bool = True) -> None:
         nonlocal refresh_job
@@ -334,6 +483,8 @@ def run_gui_widget(
             card["five_reset"].config(text=status["five_reset"])
             card["week_left"].config(text=status["week_left"])
             card["week_reset"].config(text=status["week_reset"])
+            set_gauge(card["five_gauge"], card["five_fill"], status["five_ratio"])
+            set_gauge(card["week_gauge"], card["week_fill"], status["week_ratio"])
             if status["available"] == "yes":
                 card["unavailable"].config(text="")
             else:
@@ -352,12 +503,29 @@ def run_gui_widget(
             refresh_job = None
         refresh()
 
+    for widget in (header, title, meta):
+        widget.bind("<ButtonPress-1>", start_drag)
+        widget.bind("<B1-Motion>", drag_window)
+        widget.bind("<Double-Button-1>", toggle_maximize)
+
+    resize_grip.bind("<ButtonPress-1>", start_resize)
+    resize_grip.bind("<B1-Motion>", resize_window)
+    resize_grip.bind("<ButtonRelease-1>", stop_resize)
+
+    minimize_button = style_button("_", minimize_window)
+    minimize_button.pack(side="left", padx=(0, 4))
+    maximize_button = style_button("□", toggle_maximize)
+    maximize_button.pack(side="left", padx=(0, 4))
+    close_button = style_button("×", root.destroy, danger=True)
+    close_button.pack(side="left")
+
     root.bind("r", manual_refresh)
     root.bind("R", manual_refresh)
     root.bind("t", toggle_topmost)
     root.bind("T", toggle_topmost)
     root.bind("q", lambda _event: root.destroy())
     root.bind("Q", lambda _event: root.destroy())
+    root.bind("<Map>", on_map)
 
     refresh()
     root.mainloop()
