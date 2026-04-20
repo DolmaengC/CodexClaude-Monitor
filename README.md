@@ -3,6 +3,10 @@
 Small local widget for checking only the remaining 5-hour and 7-day limits for
 Codex and Claude.
 
+## Screenshot
+
+![Mini widget screenshot](src/%EC%BA%A1%EC%B2%98.PNG)
+
 ## Mini window
 
 ```powershell
